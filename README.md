@@ -7,7 +7,7 @@ call them in your workflows.
 
 This tool lets business users turn spreadsheet logic into fully functional MCP servers that AI assistants like Claude can call directly. If you can write a formula, you can build an MCP server tool.
 
-Each MCP server is backed by an XLSX workbook. You define your inputs, write your business logic as formulas, and define your outputs — the same way you'd build any spreadsheet. The tool wraps that workbook in an MCP server automatically, so it can be called by Claude (or any MCP-compatible client) as a live tool.
+Each MCP server is backed by an XLSX workbook. You define your inputs, write your business logic as formulas, and define your outputs — the same way you'd build any spreadsheet. Weldr wraps that workbook in an MCP server automatically, so it can be called by Claude (or any MCP-compatible client) as a live tool.
 
 ## Why spreadsheets
 
@@ -46,7 +46,10 @@ Overall, output sheets should be the same as input sheets, but with a few differ
 1. Every workbook must have a sheet named `metadata`.  
 2. Cell A1 must have a formula that returns the number of errors in the workbook's calculations.  The simplest way to do 
 this is to write a formula that sums up all the errors in your output sheet(s).  For example, if you have one output sheet 
-named `output_invalid_categories`, then the formula could be `=SUMPRODUCT(--ISERROR($output_invalid_categories.A1:G501))`.
+named `output_invalid_categories`, then the formula could be `=SUMPRODUCT(--ISERROR($output_invalid_categories.A1:G501))` 
+(change the cell range to your situation).  If the formula returns 0, then the Java wrapper interprets that to mean the calculations
+were successful and it begins extracting data from the output sheets.  If the formula returns a non-zero number, then the 
+Java wrapper interprets that to mean the calculations were NOT successful and it sends an error to the AI assistant.
 
 Outside of these requirements, you can write your business logic with whatever formulas and columns you want.
 
