@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "get_categories": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "/home/pc/repos/weldr/get-catgories.jar"
+      ]
+    },
+    "validate_transactions": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "/home/pc/repos/weldr/validate-transaction-categories.jar"
+      ]
+    }
+  }
+}
