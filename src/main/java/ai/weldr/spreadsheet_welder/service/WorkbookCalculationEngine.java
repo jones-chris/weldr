@@ -2,6 +2,7 @@ package ai.weldr.spreadsheet_welder.service;
 
 import ai.weldr.spreadsheet_welder.dao.TempFileWorkbookLoggerDaoImpl;
 import ai.weldr.spreadsheet_welder.dao.WorkbookLoggerDao;
+import ai.weldr.spreadsheet_welder.exception.WorkbookValidationException;
 import com.google.gson.Gson;
 import com.opencsv.CSVReader;
 import ai.weldr.spreadsheet_welder.Constants;
@@ -11,10 +12,10 @@ import ai.weldr.spreadsheet_welder.model.WorkbookOutput;
 import ai.weldr.spreadsheet_welder.model.WorkbookProxy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.Row;
-import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.SpreadsheetVersion;
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.AreaReference;
+import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import java.io.IOException;
@@ -61,6 +62,25 @@ public class WorkbookCalculationEngine {
         this.workbookLoggerDao = workbookLoggerDao;
 
         this.loadXlsxFile();
+    }
+
+    public WorkbookCalculationEngine withInput(String namedRange, Object inputValue) {
+         Name name = this.workbookProxy.getWorkbook()
+                 .getName(namedRange);
+
+        String refersTo = name.getRefersToFormula();
+
+        AreaReference namedRangeAreaReference = new AreaReference(refersTo, SpreadsheetVersion.EXCEL2007);
+
+        // Get data type and comment (if it exists) for the single celled named range.
+        CellReference cellReference = namedRangeAreaReference.getFirstCell();
+        Cell cell = this.workbookProxy.getWorkbook().getSheet(cellReference.getSheetName())
+                .getRow(cellReference.getRow())
+                .getCell(cellReference.getCol());
+
+        cell.setCellValue(inputValue.toString());
+
+        return this;
     }
 
     public WorkbookCalculationEngine withInput(String worksheetName, CSVReader csvReader) {

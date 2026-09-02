@@ -110,7 +110,7 @@ public class Constants {
                     return false;
                 }
             },
-            "Boolean", value -> Boolean.parseBoolean(value)
+            "Boolean", Boolean::parseBoolean
     );
 
     private static final Map<String, Function<Cell, Object>> BUILT_IN_TYPE_TRANSFORMERS = Map.of(

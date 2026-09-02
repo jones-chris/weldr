@@ -13,6 +13,13 @@
         "-jar",
         "/home/pc/repos/weldr/validate-transaction-categories.jar"
       ]
+    },
+    "get_budget_amounts": {
+      "command": "java",
+      "args": [
+        "-jar",
+        "/home/pc/repos/weldr/get-budget-amounts.jar"
+      ]
     }
   }
 }

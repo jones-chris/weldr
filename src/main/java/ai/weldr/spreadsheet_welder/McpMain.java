@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -99,6 +100,15 @@ public class McpMain {
                                 )
                         )
                 ).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        manifest.inputNamedRanges()
+                .forEach(namedRangeMetadata -> inputJsonSchema.put(
+                        namedRangeMetadata.name(),
+                        Map.of(
+                                "type", namedRangeMetadata.dataType(),
+                                "description", namedRangeMetadata.comment()
+                        )
+                    )
+                );
         inputJsonSchema.put(
                 "debug_mode_enabled",
                 Map.of(
@@ -179,6 +189,7 @@ public class McpMain {
                     // to reduce instantiation overhead.
                     WorkbookCalculationEngine engine = new WorkbookCalculationEngine();
 
+                    // Load the inputs into the engine.  If any required input is missing, return an error.
                     try {
                         manifest.inputSheetsMetadata()
                                 .parallelStream() // Write the data to the workbook in parallel so that it's faster.
@@ -202,6 +213,17 @@ public class McpMain {
                                             }
                                         }
                                 );
+
+                        manifest.inputNamedRanges()
+                                .parallelStream()
+                                .forEach(inputNamedRange -> {
+                                    Object arg = Optional.ofNullable(callToRequest.arguments().get(inputNamedRange.name()))
+                                            .orElseThrow(() -> new IllegalArgumentException("Error: Missing required input named range " + inputNamedRange.name()));
+
+                                    String workbookInputNamedRange = Constants.INPUT_SHEET_PREFIX + inputNamedRange.name();
+
+                                    engine.withInput(workbookInputNamedRange, arg);
+                                });
                     } catch (Throwable t) {
                         return new McpSchema.CallToolResult(
                                 List.of(new McpSchema.TextContent(t.getMessage())),
@@ -211,6 +233,7 @@ public class McpMain {
                         );
                     }
 
+                    // Run the engine.
                     try {
                         WorkbookOutput workbookOutput = engine.runWorkbook();
                         Map<String, Object> resultContent = new HashMap<>();
