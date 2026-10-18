@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
+import static ai.weldr.spreadsheet_welder.Constants.assertIsNotError;
+
 @Slf4j
 public class WorkbookProxy implements AutoCloseable {
 
@@ -28,18 +30,6 @@ public class WorkbookProxy implements AutoCloseable {
         } catch (IOException e) {
             // todo:  Add logging here.
             throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Asserts that the workbook calculation was successful by checking the value of the first cell in the metadata sheet.
-     */
-    public void assertIsSuccessful() {
-        Cell cell = this.workbook.getSheet(Constants.METADATA).getRow(0).getCell(0);
-
-        int result = (int) cell.getNumericCellValue();
-        if (result != 0) {
-            throw new RuntimeException("Non-zero result: " + result);
         }
     }
 
@@ -91,19 +81,16 @@ public class WorkbookProxy implements AutoCloseable {
                     Row row = sheet.getRow(rowIdx);
                     List<Object> rowDataBlock = new ArrayList<>();
 
-                    // Short circuit logic based on the include_in_output column.  If the value is false, then we skip the
-                    // row entirely...
-                    boolean includeRowInOutput = (Boolean) Constants.getCellValue(row.getCell(0));
-                    if (!includeRowInOutput) {
-                        continue;
-                    }
-
                     // ...otherwise extract the data from the row and add it to the output data block.
                     for (int cellIdx = 1; cellIdx < row.getLastCellNum(); cellIdx++) {
                         if (columnIndicesToSkip.contains(cellIdx)) {
                             log.debug("Skipping cell at address {} because it is in the ignored column names list", Constants.getCellAddress(row.getCell(cellIdx)));
                             continue;
                         }
+
+                        // Check if the cell contains an error.  If it does, we throw an exception.  This is a hard-stop
+                        // because we don't want to continue processing the workbook if there are errors in the output data.
+                        assertIsNotError(row.getCell(cellIdx));
 
                         Object cellValue = Constants.getCellValue(row.getCell(cellIdx));
 
@@ -112,6 +99,14 @@ public class WorkbookProxy implements AutoCloseable {
                         }
 
                         rowDataBlock.add(cellValue);
+                    }
+
+                    // Check the include_in_output column.  If the value is false, then we skip the
+                    // row entirely.  Unfortunately, we can't do this before we check if the row's cells contain errors
+                    // because an error in a row may be silently eaten by the include_in_output column returning false.
+                    boolean includeRowInOutput = (Boolean) Constants.getCellValue(row.getCell(0));
+                    if (!includeRowInOutput) {
+                        continue;
                     }
 
                     // We don't add empty rows to the output.

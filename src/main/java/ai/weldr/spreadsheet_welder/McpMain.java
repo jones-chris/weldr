@@ -234,12 +234,14 @@ public class McpMain {
                     }
 
                     // Run the engine.
+                    WorkbookOutput workbookOutput = null;
+                    Map<String, Object> resultContent = new HashMap<>();
                     try {
-                        WorkbookOutput workbookOutput = engine.runWorkbook();
-                        Map<String, Object> resultContent = new HashMap<>();
+                        workbookOutput = engine.runWorkbook();
 
                         // Write the workbook output to CSV files and return the file path to the AI client.
                         Map<String, Object> outputFilePaths = new HashMap<>();
+                        WorkbookOutput finalWorkbookOutput = workbookOutput;
                         workbookOutput.getOutput()
                                 .entrySet()
                                 .stream()
@@ -247,7 +249,7 @@ public class McpMain {
                                 .forEach(entry -> {
                                     String sheetName = entry.getKey();
 
-                                    List<String> headers = workbookOutput.getHeaders().get(sheetName);
+                                    List<String> headers = finalWorkbookOutput.getHeaders().get(sheetName);
 
                                     String filePath = writeOutputToCsvFile(sheetName, entry.getValue(), headers)
                                             .toAbsolutePath()
@@ -264,10 +266,25 @@ public class McpMain {
                             resultContent.put("outputs", outputs);
                         }
 
+                        return McpSchema.CallToolResult.builder()
+                                .isError(workbookOutput.hasError())
+                                .structuredContent(
+                                        workbookOutput.hasError()
+                                                ? new McpSchema.TextContent(stringifyExceptionStackTrace(workbookOutput.getError()))
+                                                : resultContent
+                                ).build();
+                    } catch (Exception e) {
+                        return new McpSchema.CallToolResult(
+                                List.of(new McpSchema.TextContent(stringifyExceptionStackTrace(e))),
+                                true,
+                                new Object(),
+                                Map.of()
+                        );
+                    } finally {
                         // if "debug_mode_enabled" is enabled, add the workbook path to the result.
                         boolean debugModeEnabled = Boolean.parseBoolean(callToRequest.arguments().getOrDefault("debug_mode_enabled", false).toString());
                         log.info("debug_mode_enabled is set to {}", debugModeEnabled);
-                        if (debugModeEnabled && workbookOutput.getStorageLocation().isPresent()) {
+                        if (debugModeEnabled && workbookOutput != null && workbookOutput.getStorageLocation().isPresent()) {
                             log.info("storage location is {}", workbookOutput.getStorageLocation().get());
                             // todo:  pass debugModeEnabled to the engine so it doesn't always write a debug workbook.
                             resultContent.put(
@@ -277,18 +294,6 @@ public class McpMain {
                                     )
                             );
                         }
-
-                        return McpSchema.CallToolResult.builder()
-                                .isError(false)
-                                .structuredContent(resultContent)
-                                .build();
-                    } catch (Exception e) {
-                        return new McpSchema.CallToolResult(
-                                List.of(new McpSchema.TextContent("Error: There was an error running the workbook engine: " + stringifyExceptionStackTrace(e))),
-                                true,
-                                new Object(),
-                                Map.of()
-                        );
                     }
                 }
         );

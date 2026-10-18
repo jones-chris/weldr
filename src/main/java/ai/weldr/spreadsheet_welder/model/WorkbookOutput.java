@@ -1,6 +1,7 @@
 package ai.weldr.spreadsheet_welder.model;
 
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
 import java.util.Map;
@@ -14,6 +15,14 @@ public class WorkbookOutput {
     private final Map<String, List<String>> headers;
 
     private final Map<String, Object[][]> output;
+
+    @Setter
+    private Throwable error;
+
+    public WorkbookOutput() {
+        this.headers = Map.of();
+        this.output = Map.of();
+    }
 
     public WorkbookOutput(Map<String, Object[][]> output, Map<String, List<String>> headers) {
         this.output = output;
@@ -30,6 +39,10 @@ public class WorkbookOutput {
         } else {
             this.storageLocation = Optional.of(storageLocation);
         }
+    }
+
+    public boolean hasError() {
+        return this.error != null;
     }
 
 }

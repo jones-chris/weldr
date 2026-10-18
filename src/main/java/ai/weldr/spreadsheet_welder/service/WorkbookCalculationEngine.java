@@ -21,6 +21,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.Optional;
 
 @Slf4j
@@ -185,7 +186,7 @@ public class WorkbookCalculationEngine {
         }
     }
 
-    public WorkbookOutput runWorkbook() throws Exception {
+    public WorkbookOutput runWorkbook() throws IOException {
         WorkbookOutput workbookOutput = null;
 
         try {
@@ -193,16 +194,16 @@ public class WorkbookCalculationEngine {
             this.workbookProxy.getWorkbook().getCreationHelper().createFormulaEvaluator().evaluateAll();
             log.info("Workbook calculation completed successfully.");
 
-            // Check exit code.
-            // todo:  Throw a checked exception here so we can handle it.
-            this.workbookProxy.assertIsSuccessful();
-            log.info("Workbook calculation completed successfully.");
-
             workbookOutput = workbookProxy.getOutputs();
             log.info("Workbook output retrieved successfully.");
         } catch (Throwable t) {
             log.error("", t);
-            throw new RuntimeException(t);  // todo:  change this exception.
+
+            if (workbookOutput == null) {
+                workbookOutput = new WorkbookOutput();
+            }
+
+            workbookOutput.setError(t);
         } finally {
             // Write workbook to disk so that the user can open it for debugging, if needed.
             Optional<StorageLocation> logStorageLocation = this.workbookLoggerDao.log(workbookProxy.getWorkbook(), manifest.name());

@@ -143,6 +143,22 @@ public class Constants {
             }
     );
 
+    public static void assertIsNotError(Cell cell) {
+        if (cell == null) {
+            return;
+        }
+
+        CellType cellType = cell.getCellType();
+        if (cellType == CellType.FORMULA) {
+            cellType = cell.getCachedFormulaResultType();
+        }
+
+        // todo:  make this throw a custom checked exception.
+        if (cellType == CellType.ERROR) {
+            throw new RuntimeException("Cell contains error at " + Constants.getCellAddress(cell));
+        }
+    }
+
     public static Object getCellValue(Cell cell) {
         if (cell == null) {
             return "";
@@ -182,7 +198,7 @@ public class Constants {
     }
 
     public static String getCellAddress(Cell cell) {
-        return cell.getSheet().getSheetName() + ":" + cell.getAddress().formatAsR1C1String();
+        return cell.getSheet().getSheetName() + ":" + cell.getAddress().formatAsString();
     }
 
 }
