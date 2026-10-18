@@ -194,11 +194,6 @@ public class WorkbookCalculationEngine {
             this.workbookProxy.getWorkbook().getCreationHelper().createFormulaEvaluator().evaluateAll();
             log.info("Workbook calculation completed successfully.");
 
-            // Check exit code.
-            // todo:  Throw a checked exception here so we can handle it.
-//            this.workbookProxy.assertIsSuccessful();
-//            log.info("Workbook assertion completed successfully.");
-
             workbookOutput = workbookProxy.getOutputs();
             log.info("Workbook output retrieved successfully.");
         } catch (Throwable t) {

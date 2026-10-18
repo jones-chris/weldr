@@ -33,19 +33,6 @@ public class WorkbookProxy implements AutoCloseable {
         }
     }
 
-//    /**
-//     * Asserts that the workbook calculation was successful by checking the value of the first cell in the metadata sheet.
-//     */
-//    public void assertIsSuccessful() {
-//        Cell cell = this.workbook.getSheet(Constants.METADATA).getRow(0).getCell(0);
-//        this.workbook.getCreationHelper().createFormulaEvaluator().evaluate(cell);
-//
-//        int result = (int) cell.getNumericCellValue();
-//        if (result != 0) {
-//            throw new RuntimeException("Non-zero result: " + result);
-//        }
-//    }
-
     /**
      * Extracts the output data from the workbook.  The output data is expected to be in sheets that start with "output_"
      * in their name. The first row of the output sheet is expected to contain the column names, and the first column of
