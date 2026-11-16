@@ -53,8 +53,10 @@ public class ValidateTransactionCategories {
         return this;
     }
 
-    public void run() throws IOException {
+    public ValidateTransactionCategories run() throws IOException {
          this.workbookOutput = this.engine.runWorkbook();
+
+         return this;
     }
 
     // todo: create one of these methods for each output array/sheet in workbook.
