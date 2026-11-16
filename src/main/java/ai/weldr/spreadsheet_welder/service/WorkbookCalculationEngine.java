@@ -2,14 +2,11 @@ package ai.weldr.spreadsheet_welder.service;
 
 import ai.weldr.spreadsheet_welder.dao.TempFileWorkbookLoggerDaoImpl;
 import ai.weldr.spreadsheet_welder.dao.WorkbookLoggerDao;
-import ai.weldr.spreadsheet_welder.exception.WorkbookValidationException;
+import ai.weldr.spreadsheet_welder.model.*;
 import com.google.gson.Gson;
 import com.opencsv.CSVReader;
 import ai.weldr.spreadsheet_welder.Constants;
 import ai.weldr.spreadsheet_welder.WorkbookValidator;
-import ai.weldr.spreadsheet_welder.model.StorageLocation;
-import ai.weldr.spreadsheet_welder.model.WorkbookOutput;
-import ai.weldr.spreadsheet_welder.model.WorkbookProxy;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.SpreadsheetVersion;
@@ -21,7 +18,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -66,8 +63,8 @@ public class WorkbookCalculationEngine {
     }
 
     public WorkbookCalculationEngine withInput(String namedRange, Object inputValue) {
-         Name name = this.workbookProxy.getWorkbook()
-                 .getName(namedRange);
+        Name name = this.workbookProxy.getWorkbook()
+                .getName(namedRange);
 
         String refersTo = name.getRefersToFormula();
 
@@ -84,70 +81,72 @@ public class WorkbookCalculationEngine {
         return this;
     }
 
-    public WorkbookCalculationEngine withInput(String worksheetName, CSVReader csvReader) {
-        final int inputSheetRowLimit = getManifest().inputSheetsMetadata()
+    public <T extends InputNamedRangeRepresentation> WorkbookCalculationEngine withInput(T input) {
+        this.withInput(input.namedRangeName(), input.toNamedRangeInputValue());
+
+        return this;
+    }
+
+    public WorkbookCalculationEngine withInput(
+            List<? extends InputSheetRowRepresentation> rows
+    ) {
+        Iterable<String[]> rowValues = () -> rows.stream()
+                .map(InputSheetRowRepresentation::toRowValues)
+                .iterator();
+
+        // All the rows are of the same type, so the sheet name will be the same for all of them.  So, it's safe to just
+        // get the first row's sheet name and use that for the entire list of rows.
+        String worksheetName = rows.getFirst().sheetName();
+
+        return populateWorksheet(worksheetName, rowValues);
+    }
+
+    public WorkbookCalculationEngine withInput(
+            String worksheetName,
+            CSVReader csvReader
+    ) {
+        return populateWorksheet(worksheetName, csvReader);
+    }
+
+    private WorkbookCalculationEngine populateWorksheet(String worksheetName, Iterable<String[]> rows) {
+        WorkbookValidator.SheetMetadata sheetMetadata = getManifest().inputSheetsMetadata()
                 .stream()
-                .filter(sheetMetadata -> sheetMetadata.name().equals(worksheetName))
+                .filter(meta -> meta.name().equals(worksheetName))
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("Could not find input sheet metadata for " + worksheetName))
-                .rowLimit();
+                .orElseThrow(() -> new RuntimeException("Could not find input sheet metadata for " + worksheetName));
+
+        final int inputSheetRowLimit = sheetMetadata.rowLimit();
+        final List<WorkbookValidator.ColumnMetadata> columnsMetadata = sheetMetadata.columnsMetadata();
 
         try {
-            String[] nextLine;
-
-            // Ignore the sheet's header row (index 0) and start inserting data on the next row in the sheet (index 1).
-            int rowIdx = 1;
-
             Sheet sheet = Optional.ofNullable(this.workbookProxy.getWorkbook().getSheet(worksheetName))
                     .orElseThrow(() -> new RuntimeException("Could not find sheet with name " + worksheetName));
 
             Row headerRow = sheet.getRow(0);
-            int numOfColumns = new Object[headerRow.getLastCellNum()].length;
+            int numOfColumns = headerRow.getLastCellNum();
 
-            while ((nextLine = csvReader.readNext()) != null) {
+            // Ignore the sheet's header row (index 0) and start inserting data on the next row in the sheet (index 1).
+            int rowIdx = 1;
+
+            for (String[] nextLine : rows) {
                 if (rowIdx >= inputSheetRowLimit) {
-                    throw new RuntimeException("CSV contains more rows than the row limit of " + inputSheetRowLimit + " for sheet " + worksheetName);
+                    throw new RuntimeException("Input contains more rows than the row limit of " + inputSheetRowLimit + " for sheet " + worksheetName);
                 }
 
-                // Check that num of columns match.
                 if (numOfColumns != nextLine.length) {
-                    throw new RuntimeException("CSV contains a row at index " + rowIdx + " that is not " + numOfColumns + " items");
+                    throw new RuntimeException("Input contains a row at index " + rowIdx + " that is not " + numOfColumns + " items");
                 }
 
-                // Get the row or create it if it does not exist.
                 Row row = sheet.getRow(rowIdx);
                 if (row == null) {
                     row = sheet.createRow(rowIdx);
                 }
 
                 for (int cellIdx = 0; cellIdx < numOfColumns; cellIdx++) {
-                    // Check that the csv value is of the expected type for the cell in the template (header row).
-                    String expectedType = manifest.inputSheetsMetadata()
-                            .stream()
-                            .filter(sheetMetadata -> sheetMetadata.name().equals(worksheetName))
-                            .findFirst()
-                            .orElseThrow(() -> new RuntimeException("Could not find input sheet metadata for " + worksheetName))
-                            .columnsMetadata()
-                            .get(cellIdx)
-                            .dataType();
-
+                    String expectedType = columnsMetadata.get(cellIdx).dataType();
                     String value = nextLine[cellIdx];
 
-                    // Check that the value is of the expected type.  If not, throw an exception.
-                    final int finalRowIdx = rowIdx;
-                    final int finalCellIdx = cellIdx;
-                    Optional.ofNullable(Constants.BUILT_IN_TYPE_VALIDATORS.get(expectedType))
-                            .map(validator -> validator.apply(value))
-                            .ifPresentOrElse(
-                                    isValid -> {
-                                        if (!isValid) {
-                                            throw new RuntimeException("Value " + value + " at row index " + finalRowIdx + " cell index " + finalCellIdx + " in sheet " + worksheetName + " is not of expected type " + expectedType);
-                                        }
-                                    },
-                                    () -> {
-                                        throw new RuntimeException("Could not find validator for expected type "+ expectedType + " for row index " + finalRowIdx + " cell index " + finalCellIdx + " in sheet " + worksheetName);
-                                    }
-                            );
+                    validateCellValue(value, expectedType, worksheetName, rowIdx, cellIdx);
 
                     Cell cell = row.getCell(cellIdx, Row.MissingCellPolicy.CREATE_NULL_AS_BLANK);
 
@@ -155,34 +154,53 @@ public class WorkbookCalculationEngine {
                         continue;
                     }
 
-                    // todo:  Make this a debug logging statement.
-                    log.info(
-                            "Attempting to set cell {}:{} (rowIdx {} and cellIdx {}) to {}", worksheetName, cell.getAddress().formatAsString(), rowIdx, cellIdx, value
+                    log.debug(
+                            "Attempting to set cell {}:{} (rowIdx {} and cellIdx {}) to {}",
+                            worksheetName, cell.getAddress().formatAsString(), rowIdx, cellIdx, value
                     );
 
-                    // Get the expected cell type from the template (header row), not from the newly created blank cell
                     Cell templateCell = headerRow.getCell(cellIdx);
-                    final CellType cellType = (templateCell != null) ? templateCell.getCellType() : CellType.STRING;
-                    
-                    if (cellType.equals(CellType.STRING)) {
-                        cell.setCellValue(value);
-                    } else if (cellType.equals(CellType.NUMERIC)) {
-                        cell.setCellValue(Double.parseDouble(value));
-                    } else if (cellType.equals(CellType.BOOLEAN)) {
-                        cell.setCellValue(Boolean.parseBoolean(value));
-                    } else {
-                        throw new IllegalArgumentException("Unsupported input data type: " + cellType + " for cell " + cell.getAddress().formatAsString() + " with value " + value);
-                    }
+                    CellType cellType = (templateCell != null) ? templateCell.getCellType() : CellType.STRING;
+
+                    setCellValue(cell, cellType, value);
                 }
 
                 rowIdx++;
             }
 
             return this;
-        } catch (Throwable t) {
-            log.error("", t);
+        } catch (Exception e) {
+            log.error("Error populating worksheet {}", worksheetName, e);
+            throw new RuntimeException(e);
+        }
+    }
 
-            throw new RuntimeException(t);
+    private void validateCellValue(String value, String expectedType, String worksheetName, int rowIdx, int cellIdx) {
+        var validator = Constants.BUILT_IN_TYPE_VALIDATORS.get(expectedType);
+        if (validator == null) {
+            throw new RuntimeException(
+                    "Could not find validator for expected type " + expectedType +
+                            " for row index " + rowIdx + " cell index " + cellIdx + " in sheet " + worksheetName
+            );
+        }
+
+        if (!validator.apply(value)) {
+            throw new RuntimeException(
+                    "Value " + value + " at row index " + rowIdx + " cell index " + cellIdx +
+                            " in sheet " + worksheetName + " is not of expected type " + expectedType
+            );
+        }
+    }
+
+    private void setCellValue(Cell cell, CellType cellType, String value) {
+        switch (cellType) {
+            case STRING -> cell.setCellValue(value);
+            case NUMERIC -> cell.setCellValue(Double.parseDouble(value));
+            case BOOLEAN -> cell.setCellValue(Boolean.parseBoolean(value));
+            default -> throw new IllegalArgumentException(
+                    "Unsupported input data type: " + cellType +
+                            " for cell " + cell.getAddress().formatAsString() + " with value " + value
+            );
         }
     }
 

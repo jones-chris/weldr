@@ -55,7 +55,7 @@ public class WorkbookValidator {
         }
 
         // Check that there is a metadata worksheet
-        assertMetadataWorksheetIsValid(this.workbook);
+//        assertMetadataWorksheetIsValid(this.workbook);
 
         // Check that there is at least one input worksheet
         for (Sheet sheet : this.workbook) {
@@ -121,27 +121,6 @@ public class WorkbookValidator {
                 inputNamedRangeMetadata,
                 outputNamedRangeMetadata
         );
-    }
-
-    private static void assertMetadataWorksheetIsValid(Workbook workbook) {
-        // Check that metadata worksheet exists.
-        Optional.ofNullable(workbook.getSheet(Constants.METADATA))
-                .ifPresentOrElse(
-                        (sheet) -> {
-                            Cell a1 = sheet.getRow(0).getCell(0);
-
-                            // Check that metadata!A1 has a formula.
-                            String formula = a1.getCellFormula();
-                            if (formula == null) {
-                                throw new WorkbookValidationException("metadata!A1 must have a formula that returns an integer");
-                            }
-                        },
-                        () -> {
-                            throw new WorkbookValidationException(
-                                    String.format("Did not find a sheet named '%s'", Constants.METADATA)
-                            );
-                        }
-                );
     }
 
     private static void assertInputSheetIsValid(Sheet sheet) {
