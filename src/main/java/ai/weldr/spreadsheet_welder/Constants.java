@@ -16,7 +16,7 @@ import java.util.function.Function;
 @Slf4j
 public class Constants {
 
-    public final static String METADATA = "metadata";
+//    public final static String METADATA = "metadata";
 
     public final static String INPUT_SHEET_PREFIX = "input_";
 

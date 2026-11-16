@@ -11,7 +11,6 @@ import org.openxmlformats.schemas.officeDocument.x2006.customProperties.CTProper
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -19,6 +18,12 @@ import java.util.UUID;
 
 @Slf4j
 public class EelPackager {
+
+    private static final String MANIFEST_JSON_FILE_NAME = "manifest.json";
+
+    private static final String MCPB_MANIFEST_JSON_FILE_NAME = "mcpb_manifest.json";
+
+    private static final String AUTHOR = "Author";
 
     private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
@@ -37,7 +42,7 @@ public class EelPackager {
         WorkbookValidator.Manifest manifest = createManifest(excelFileName, id);
         String manifestJson = gson.toJson(manifest);
 
-        Path tmpFilePath = new File("manifest.json").toPath();
+        Path tmpFilePath = new File(MANIFEST_JSON_FILE_NAME).toPath();
         Files.write(tmpFilePath, manifestJson.getBytes());
         log.info("Manifest written to: {}", tmpFilePath.toAbsolutePath());
 
@@ -45,7 +50,7 @@ public class EelPackager {
         WorkbookValidator.McpbManifest mcpbManifest = WorkbookValidator.McpbManifest.fromAppManifest(manifest);
         String mcpbManifestJson = gson.toJson(mcpbManifest);
 
-        Path mcpbTmpFilePath = new File("mcpb_manifest.json").toPath();
+        Path mcpbTmpFilePath = new File(MCPB_MANIFEST_JSON_FILE_NAME).toPath();
         Files.write(mcpbTmpFilePath, mcpbManifestJson.getBytes());
         log.info("MCPB Manifest written to: {}", mcpbTmpFilePath.toAbsolutePath());
     }
@@ -71,7 +76,7 @@ public class EelPackager {
         final String description = Optional.ofNullable(coreProperties.getDescription())
                 .orElseThrow(() -> new IllegalArgumentException("XLSX file is missing the 'Description' property in its core properties"));
 
-        final String creator = Optional.ofNullable(customProperties.getProperty("Author"))
+        final String creator = Optional.ofNullable(customProperties.getProperty(AUTHOR))
                 .map(CTProperty::getLpwstr)
                 .orElseThrow(() -> new IllegalArgumentException("XLSX file is missing the 'Author' property in its custom properties"));
 
@@ -80,31 +85,6 @@ public class EelPackager {
         final int version = Optional.ofNullable(coreProperties.getRevision())
                         .map(Integer::parseInt)
                         .orElse(0);
-
-        return createManifest(workbook, creator, title, version, id, description);
-    }
-
-    /**
-     * Validates an Excel workbook and creates the manifest from an Excel file's {@link InputStream}.
-     *
-     * @param excelInputStream The {@link InputStream} of the Excel workbook.
-     * @return {@link WorkbookValidator.Manifest}
-     */
-    public static WorkbookValidator.Manifest createManifest(
-        final InputStream excelInputStream,
-        final UUID id
-    ) throws IOException {
-        Workbook workbook = WorkbookFactory.create(excelInputStream);
-
-        // todo:  put this duplicated code in a helper method.
-        POIXMLProperties.CoreProperties coreProperties = ((XSSFWorkbook) workbook).getProperties().getCoreProperties();
-        POIXMLProperties.CustomProperties customProperties = ((XSSFWorkbook) workbook).getProperties().getCustomProperties();
-
-        // Fetch the specific metadata fields
-        final String title = coreProperties.getTitle();
-        final String description = coreProperties.getDescription();
-        final String creator = customProperties.getProperty("Author").getLpwstr();
-        final int version = coreProperties.getRevision() != null ? Integer.parseInt(coreProperties.getRevision()) : 0;
 
         return createManifest(workbook, creator, title, version, id, description);
     }
@@ -122,4 +102,25 @@ public class EelPackager {
                 .createManifest();
     }
 
+    /**
+     * Dynamically generates a ".java" file from the given {@link ai.weldr.spreadsheet_welder.WorkbookValidator.Manifest}
+     * and compiles it into a ".class" file and then packages it into a ".jar" file.  The generated ".class" file will
+     * expose the workbook's inputs and outputs as static methods, allowing for easy integration into Java applications.
+     *
+     * @param manifest {@link ai.weldr.spreadsheet_welder.WorkbookValidator.Manifest}
+     * @return {@link File} to the generated ".java" file.  Note that a separate script needs to call javac to compile it
+     * to a ".class" file and then package it into a ".jar" file.
+     */
+    private static File createJavaApiFile(WorkbookValidator.Manifest manifest) {
+        try {
+            File tempFile = File.createTempFile("java_api", ".jar");
+            tempFile.deleteOnExit();
+            return tempFile;
+        } catch (IOException e) {
+            log.error("Failed to create temporary file for Java API", e);
+            throw new RuntimeException("Failed to create temporary file for Java API", e);
+        }
+    }
+
 }
+
