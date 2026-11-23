@@ -83,6 +83,10 @@ public class WorkbookProxy implements AutoCloseable {
 
                     // ...otherwise extract the data from the row and add it to the output data block.
                     for (int cellIdx = 1; cellIdx < row.getLastCellNum(); cellIdx++) {
+
+                        // Check if the cell is in a column that should be skipped.  If it is, we skip the cell entirely.
+                        // This is how errors in ignored columns do not throw an exception and stop the workbook processing,
+                        // because we check if their ignored first.
                         if (columnIndicesToSkip.contains(cellIdx)) {
                             log.debug("Skipping cell at address {} because it is in the ignored column names list", Constants.getCellAddress(row.getCell(cellIdx)));
                             continue;
@@ -104,8 +108,7 @@ public class WorkbookProxy implements AutoCloseable {
                     // Check the include_in_output column.  If the value is false, then we skip the
                     // row entirely.  Unfortunately, we can't do this before we check if the row's cells contain errors
                     // because an error in a row may be silently eaten by the include_in_output column returning false.
-                    boolean includeRowInOutput = (Boolean) Constants.getCellValue(row.getCell(0));
-                    if (!includeRowInOutput) {
+                    if (! extractRow(row)) {
                         continue;
                     }
 
@@ -149,5 +152,25 @@ public class WorkbookProxy implements AutoCloseable {
                                 || (obj instanceof String && ((String) obj).trim().isEmpty())
                                 || (obj instanceof Number && ((Number) obj).doubleValue() == 0)
                 );
+    }
+
+    private static boolean extractRow(Row row) {
+        Object value = Constants.getCellValue(row.getCell(0));
+
+        try {
+            if (!(value instanceof Boolean)) {
+                throw new IllegalStateException("Expected a boolean value in the first column of the output sheet, " + row.getSheet().getSheetName() + ", but found: " + value);
+            }
+
+            // If the value is false, we skip the row entirely.
+            if (! Boolean.parseBoolean(value.toString())) {
+                return false;
+            }
+        } catch (Throwable t) {
+            log.error("Error encountered when checking the include_in_output column for row at address {} in sheet {}.  Value found: {}", Constants.getCellAddress(row.getCell(0)), row.getSheet().getSheetName(), value);
+            throw t;
+        }
+
+        return true;
     }
 }
