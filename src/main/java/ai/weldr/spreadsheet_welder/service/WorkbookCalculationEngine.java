@@ -155,23 +155,21 @@ public class WorkbookCalculationEngine {
                         continue;
                     }
 
-                    // todo:  Make this a debug logging statement.
-                    log.info(
+                    log.debug(
                             "Attempting to set cell {}:{} (rowIdx {} and cellIdx {}) to {}", worksheetName, cell.getAddress().formatAsString(), rowIdx, cellIdx, value
                     );
 
-                    // Get the expected cell type from the template (header row), not from the newly created blank cell
-                    Cell templateCell = headerRow.getCell(cellIdx);
-                    final CellType cellType = (templateCell != null) ? templateCell.getCellType() : CellType.STRING;
-                    
-                    if (cellType.equals(CellType.STRING)) {
-                        cell.setCellValue(value);
-                    } else if (cellType.equals(CellType.NUMERIC)) {
-                        cell.setCellValue(Double.parseDouble(value));
-                    } else if (cellType.equals(CellType.BOOLEAN)) {
-                        cell.setCellValue(Boolean.parseBoolean(value));
+                    // Get the expected cell type and set the cell value accordingly.
+                    // todo: clean this up.
+                    if (expectedType.startsWith("Date")) {
+                        cell.setCellValue(value); // todo:  Add date parsing and formatting here.
                     } else {
-                        throw new IllegalArgumentException("Unsupported input data type: " + cellType + " for cell " + cell.getAddress().formatAsString() + " with value " + value);
+                        switch (expectedType) {
+                            case "Decimal", "Integer" -> cell.setCellValue(Double.parseDouble(value));
+                            case "Boolean" -> cell.setCellValue(Boolean.parseBoolean(value));
+                            case "String" -> cell.setCellValue(value);
+                            default -> throw new IllegalArgumentException("Unsupported input data type: " + expectedType + " for cell " + cell.getAddress().formatAsString() + " with value " + value);
+                        }
                     }
                 }
 
