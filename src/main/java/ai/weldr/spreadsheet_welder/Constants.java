@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
+import org.apache.poi.ss.usermodel.FormulaError;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -153,6 +154,22 @@ public class Constants {
 
         // todo:  make this throw a custom checked exception.
         if (cellType == CellType.ERROR) {
+            CellType rawType = cell.getCellType();
+            String code;
+            try {
+                code = FormulaError.forInt(cell.getErrorCellValue()).getString();
+            } catch (Exception e) {
+                code = "unknown(" + cell.getErrorCellValue() + ")";
+            }
+            log.error("Error cell {}!{}: rawType={}, resultType={}, errorCode={}, formula={}, rowIdx={}, colIdx={}",
+                    cell.getSheet().getSheetName(),
+                    cell.getAddress().formatAsString(),
+                    rawType,
+                    cellType,
+                    code,
+                    rawType == CellType.FORMULA ? cell.getCellFormula() : "n/a",
+                    cell.getRowIndex(), cell.getColumnIndex());
+
             throw new RuntimeException("Cell contains error at " + Constants.getCellAddress(cell));
         }
     }

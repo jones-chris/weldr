@@ -105,7 +105,8 @@ public class McpMain {
                         namedRangeMetadata.name(),
                         Map.of(
                                 "type", namedRangeMetadata.dataType(),
-                                "description", namedRangeMetadata.comment()
+                                // todo: clean this up.  Preferrably a missing comment should not be added to the map at all.
+                                "description", (namedRangeMetadata.comment() == null) ? "No description available" : namedRangeMetadata.comment()
                         )
                     )
                 );
